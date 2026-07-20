@@ -44,8 +44,9 @@ impl Card {
         format!("{}{}", rank_char(self.rank), suit_char(self.suit))
     }
 
-    /// Parse a two-char code back into a card (used by tests + to build fixed hands readably).
+    /// Parse a two-char code back into a card — a test helper to build fixed hands readably.
     /// Case-insensitive on the rank, lowercase suit letters. Returns `None` on anything invalid.
+    #[cfg(test)]
     pub fn from_code(code: &str) -> Option<Card> {
         let mut chars = code.chars();
         let r = chars.next()?;

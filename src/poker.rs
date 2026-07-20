@@ -283,11 +283,7 @@ impl Poker {
                 self.stack[s] += over;
                 self.committed[s] -= over;
                 self.street_bet[s] = matched;
-                self.push_log(format!(
-                    "{} takes back {} uncalled.",
-                    self.name_of(s),
-                    over
-                ));
+                self.push_log(format!("{} takes back {} uncalled.", self.name_of(s), over));
             }
         }
     }
@@ -387,8 +383,8 @@ impl Poker {
         } else {
             split_pot(pot, self.button)
         };
-        for s in 0..PLAYERS {
-            self.stack[s] += award[s];
+        for (slot, add) in self.stack.iter_mut().zip(award.iter()) {
+            *slot += *add;
         }
         let revealed: Vec<(usize, [Card; 2])> = (0..PLAYERS)
             .filter(|&s| !self.folded[s])
@@ -413,7 +409,11 @@ impl Poker {
             format!(
                 "{} shows {} ({})",
                 self.name_of(s),
-                self.hole[s].iter().map(|c| c.to_code()).collect::<Vec<_>>().join(" "),
+                self.hole[s]
+                    .iter()
+                    .map(|c| c.to_code())
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 category_name(hands[s].cat)
             )
         };
@@ -469,7 +469,9 @@ impl Poker {
                     self.result = Some(MatchEnd::Win(1));
                 }
                 Ordering::Equal => {
-                    self.push_log("24 hands complete — even stacks, the match is a draw.".to_string());
+                    self.push_log(
+                        "24 hands complete — even stacks, the match is a draw.".to_string(),
+                    );
                     self.result = Some(MatchEnd::Draw);
                 }
             }
@@ -564,7 +566,11 @@ impl Poker {
         self.last_raise_size = self.street_bet[me] - previous;
         self.acted[me] = true;
         if self.stack[me] == 0 {
-            self.push_log(format!("{} is all-in for {}.", self.name_of(me), self.street_bet[me]));
+            self.push_log(format!(
+                "{} is all-in for {}.",
+                self.name_of(me),
+                self.street_bet[me]
+            ));
         } else if previous == 0 {
             self.push_log(format!("{} bets {}.", self.name_of(me), to));
         } else {
@@ -765,7 +771,11 @@ impl Minigame for Poker {
             obj.insert("your_turn".into(), json!(my_turn));
             obj.insert(
                 "to_call".into(),
-                if my_turn { json!(self.owes(me)) } else { Value::Null },
+                if my_turn {
+                    json!(self.owes(me))
+                } else {
+                    Value::Null
+                },
             );
         }
         v
@@ -864,7 +874,11 @@ impl TurnBasedGame for Poker {
                 self.commit(me, amount);
                 self.acted[me] = true;
                 if self.stack[me] == 0 {
-                    self.push_log(format!("{} calls {} and is all-in.", self.name_of(me), amount));
+                    self.push_log(format!(
+                        "{} calls {} and is all-in.",
+                        self.name_of(me),
+                        amount
+                    ));
                 } else {
                     self.push_log(format!("{} calls {}.", self.name_of(me), amount));
                 }
@@ -915,12 +929,26 @@ mod tests {
     /// never touches) — for the illegal-move inertness assertion.
     fn snapshot(g: &Poker) -> String {
         format!(
-            "{:?}",
-            (
-                &g.stack, &g.hole, &g.board_full, g.board_shown, g.street, &g.committed,
-                &g.street_bet, &g.acted, g.last_raise_size, g.to_act, &g.folded, g.ply,
-                g.button, g.hand_no, g.phase, g.result, &g.log,
-            )
+            "stack={:?} hole={:?} board={:?} shown={} street={:?} committed={:?} bet={:?} \
+             acted={:?} lrs={} to_act={} folded={:?} ply={} button={} hand={} phase={:?} \
+             result={:?} log={:?}",
+            g.stack,
+            g.hole,
+            g.board_full,
+            g.board_shown,
+            g.street,
+            g.committed,
+            g.street_bet,
+            g.acted,
+            g.last_raise_size,
+            g.to_act,
+            g.folded,
+            g.ply,
+            g.button,
+            g.hand_no,
+            g.phase,
+            g.result,
+            g.log
         )
     }
 
@@ -961,7 +989,14 @@ mod tests {
     fn blind_schedule_doubles_every_eight_hands() {
         let mut g = game(1);
         // Level 0 hands 1-8, level 1 hands 9-16, level 2 hands 17-24.
-        for (hand, sb, bb) in [(1, 1, 2), (8, 1, 2), (9, 2, 4), (16, 2, 4), (17, 4, 8), (24, 4, 8)] {
+        for (hand, sb, bb) in [
+            (1, 1, 2),
+            (8, 1, 2),
+            (9, 2, 4),
+            (16, 2, 4),
+            (17, 4, 8),
+            (24, 4, 8),
+        ] {
             g.hand_no = hand;
             assert_eq!(g.small_blind(), sb, "hand {hand} small blind");
             assert_eq!(g.big_blind(), bb, "hand {hand} big blind");
@@ -977,7 +1012,10 @@ mod tests {
         // Facing the big blind, the button may fold/call and the min-raise is to 4 (2×BB).
         assert!(moves.contains(&"fold".to_string()));
         assert!(moves.contains(&"call".to_string()));
-        assert!(moves.contains(&"raise:4".to_string()), "min-raise is to 4, got {moves:?}");
+        assert!(
+            moves.contains(&"raise:4".to_string()),
+            "min-raise is to 4, got {moves:?}"
+        );
         assert!(moves.contains(&"allin".to_string()));
 
         // A raise below the minimum is rejected AND leaves the game unchanged.
@@ -1091,8 +1129,16 @@ mod tests {
     fn split_pot_awards_the_odd_chip_to_the_non_dealer() {
         // Direct test of the defensive odd-chip rule (unreachable in real showdowns).
         assert_eq!(split_pot(10, 0), [5, 5]);
-        assert_eq!(split_pot(7, 0), [3, 4], "button=0 → non-dealer seat 1 gets the odd chip");
-        assert_eq!(split_pot(7, 1), [4, 3], "button=1 → non-dealer seat 0 gets the odd chip");
+        assert_eq!(
+            split_pot(7, 0),
+            [3, 4],
+            "button=0 → non-dealer seat 1 gets the odd chip"
+        );
+        assert_eq!(
+            split_pot(7, 1),
+            [4, 3],
+            "button=1 → non-dealer seat 0 gets the odd chip"
+        );
     }
 
     #[test]
@@ -1163,7 +1209,10 @@ mod tests {
                 .to_string();
             m.make_move(seat, &mv, ply).unwrap();
         }
-        assert!(m.is_resolved(), "the match must resolve within the hand cap");
+        assert!(
+            m.is_resolved(),
+            "the match must resolve within the hand cap"
+        );
         let r = m.result().unwrap();
         assert!(r.outcome == "Winner" || r.outcome == "Draw");
     }
@@ -1184,8 +1233,14 @@ mod tests {
             assert!(p["hole"].is_null(), "spectator must not see any hole cards");
         }
         let a_view = g.observe(Some(alice));
-        assert!(a_view["players"][0]["hole"].is_array(), "alice sees her own cards");
-        assert!(a_view["players"][1]["hole"].is_null(), "alice must not see bob's cards");
+        assert!(
+            a_view["players"][0]["hole"].is_array(),
+            "alice sees her own cards"
+        );
+        assert!(
+            a_view["players"][1]["hole"].is_null(),
+            "alice must not see bob's cards"
+        );
 
         // Raw-string: neither card token appears where it must not (the spec asserts on JSON).
         let public_s = public.to_string();

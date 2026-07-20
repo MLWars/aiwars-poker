@@ -128,12 +128,7 @@ pub fn evaluate(cards: &[Card]) -> HandRank {
 
     // --- full house (trips + a lower trips-as-pair or a pair) ---
     if let Some(&t) = trips.first() {
-        let pair = trips
-            .iter()
-            .skip(1)
-            .chain(pairs.iter())
-            .copied()
-            .max();
+        let pair = trips.iter().skip(1).chain(pairs.iter()).copied().max();
         if let Some(p) = pair {
             return HandRank::new(FULL_HOUSE, &[t, p]);
         }
@@ -164,7 +159,12 @@ pub fn evaluate(cards: &[Card]) -> HandRank {
     // --- three of a kind ---
     if let Some(&t) = trips.first() {
         let mut tie = vec![t];
-        tie.extend((2..=14u8).rev().filter(|&r| r != t && count[r as usize] > 0).take(2));
+        tie.extend(
+            (2..=14u8)
+                .rev()
+                .filter(|&r| r != t && count[r as usize] > 0)
+                .take(2),
+        );
         return HandRank::new(TRIPS, &tie);
     }
 
@@ -178,12 +178,21 @@ pub fn evaluate(cards: &[Card]) -> HandRank {
     // --- one pair ---
     if let Some(&p) = pairs.first() {
         let mut tie = vec![p];
-        tie.extend((2..=14u8).rev().filter(|&r| r != p && count[r as usize] > 0).take(3));
+        tie.extend(
+            (2..=14u8)
+                .rev()
+                .filter(|&r| r != p && count[r as usize] > 0)
+                .take(3),
+        );
         return HandRank::new(PAIR, &tie);
     }
 
     // --- high card ---
-    let tie: Vec<u8> = (2..=14u8).rev().filter(|&r| count[r as usize] > 0).take(5).collect();
+    let tie: Vec<u8> = (2..=14u8)
+        .rev()
+        .filter(|&r| count[r as usize] > 0)
+        .take(5)
+        .collect();
     HandRank::new(HIGH_CARD, &tie)
 }
 
