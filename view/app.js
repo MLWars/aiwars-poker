@@ -123,6 +123,27 @@ function labelMove(mv, data, heroSeat) {
   return mv;
 }
 
+// The last hand number we've rendered — drives the between-hands result "beat". Module-level so
+// it persists across renders in every mode (live, replay, bridge, seat); they all flow through
+// renderPoker. Null until the first render, so joining mid-match or a replay seek never flashes.
+let lastHand = null;
+let beatTimer = null; // fade timer for the beat; cleared when a newer beat replaces it
+
+// Flash the just-finished hand's result over the felt for a beat (~2.6s), then fade. `lh` is
+// data.last_hand — the engine's already-rich sentence (a showdown reveal or a fold outcome).
+function showHandBeat(lh) {
+  const b = el("beat");
+  const note = lh && lh.note ? String(lh.note) : "";
+  if (!b || !note) return; // nothing to say (a resolved hand always carries a note)
+  b.textContent = note;
+  b.classList.add("on");
+  if (beatTimer) clearTimeout(beatTimer);
+  beatTimer = setTimeout(() => {
+    beatTimer = null;
+    b.classList.remove("on");
+  }, 2600);
+}
+
 // The one renderer. `ctx` is null for spectator/replay, or { heroSeat, turn, pending } in seat mode.
 function renderPoker(data, ctx) {
   const players = data.players || [];
@@ -130,6 +151,16 @@ function renderPoker(data, ctx) {
   const botSeat = ctx && ctx.heroSeat != null ? ctx.heroSeat : 0;
   const topSeat = 1 - botSeat;
   const over = data.status === "over";
+
+  // Between-hands beat: when exactly one hand has advanced since the last render, flash the
+  // finished hand's result. A first render, a multi-hand jump (a replay seek) or a step backwards
+  // just resyncs the tracker silently — no stale flash. Suppressed once the match is over (the
+  // endgame banner is the result moment then).
+  const h = data.hand;
+  if (typeof h === "number") {
+    if (lastHand !== null && h === lastHand + 1 && !over) showHandBeat(data.last_hand);
+    lastHand = h;
+  }
 
   el("hand").textContent = `hand ${data.hand ?? "—"}/${data.max_hands ?? 24}`;
   const bl = data.blinds || {};
@@ -187,7 +218,7 @@ function renderPoker(data, ctx) {
   }
   fin.classList.remove("on");
 
-  const last = lh ? ` · <span class="off">last: ${esc(lh.note)}</span>` : "";
+  const last = lh ? ` · <span class="off">last hand: ${esc(lh.note)}</span>` : "";
   if (ctx) {
     const errTxt = seatErr ? ` · <span class="off">${esc(seatErr)}</span>` : "";
     if (ctx.pending) {

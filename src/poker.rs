@@ -12,10 +12,16 @@
 //! the minimum up to all-in.
 //!
 //! HIDDEN INFORMATION is the invariant that matters: [`observe`](Minigame::observe) branches on
-//! the viewer. `observe(None)` (the spectator) and an opponent's view NEVER include a live
-//! player's hole cards; `observe(Some(me))` shows that agent its own cards. At a called showdown
-//! both hands are revealed to everyone; a folded hand is never revealed. The deck is shuffled
-//! with a deterministic, `settings.seed`-seeded RNG (never the wall clock), exactly like werewolf.
+//! the viewer. An agent's own view and every OPPONENT's view NEVER include another live player's
+//! hole cards — `observe(Some(me))` shows only that seat its own cards — so the champions always
+//! play real hidden-information poker. The anonymous SPECTATOR (`observe(None)`) hides both live
+//! hands too, EXCEPT in "TV mode": when `settings.seat_kinds` (injected by the platform minigame
+//! library from the world's seat occupants) marks every seat a champion, an AI-vs-AI table is
+//! broadcast poker-TV style with both live hands face-up — safe because no seated human exists
+//! whose opponent's cards a second tab could leak. Absent or malformed, `seat_kinds` FAILS CLOSED
+//! (hands hidden), so an older library behaves exactly as before. At a called showdown both hands
+//! are revealed to everyone; a folded hand is never revealed. The deck is shuffled with a
+//! deterministic, `settings.seed`-seeded RNG (never the wall clock), exactly like werewolf.
 
 use aiwars_minigame::{AgentId, MatchError, Minigame, Outcome, TurnBasedGame};
 use rand::rngs::StdRng;
@@ -91,8 +97,9 @@ struct HandResult {
 pub struct Poker {
     players: Vec<AgentId>, // seat-indexed, length 2
     rng: StdRng,
-    button: usize, // dealer seat for the current hand
-    hand_no: u32,  // 1..=MAX_HANDS
+    button: usize,    // dealer seat for the current hand
+    hand_no: u32,     // 1..=MAX_HANDS
+    open_hands: bool, // spectator TV mode: an all-champion table opens both live hands to observe(None)
 
     stack: [u32; 2],
     hole: [[Card; 2]; 2],
@@ -581,11 +588,19 @@ impl Poker {
     // ----- observation --------------------------------------------------------------------
 
     /// Whether `seat`'s hole cards may be shown to `viewer`. Your own cards, always; anyone
-    /// else's only at a called showdown that ended the match (the current hand IS the final
-    /// hand then, so the revealed set names exactly the shown seats). A folded hand — and every
-    /// live hand mid-match — stays hidden.
+    /// else's only at a called showdown that ended the match (the current hand IS the final hand
+    /// then, so the revealed set names exactly the shown seats). The one extra opening is TV mode
+    /// below — the anonymous spectator at an all-champion table. Otherwise a folded hand, and
+    /// every live hand mid-match, stays hidden.
     fn hole_visible(&self, viewer: Option<usize>, seat: usize) -> bool {
         if viewer == Some(seat) {
+            return true;
+        }
+        // TV mode (all-champion table): the anonymous SPECTATOR — never an opponent — sees both
+        // LIVE hands face-up, broadcasting an AI-vs-AI match poker-TV style. A folded hand stays
+        // mucked, preserving "a folded hand is never revealed". An opponent's view (`viewer ==
+        // Some(other)`) is untouched, so the champions keep playing hidden-information poker.
+        if viewer.is_none() && self.open_hands && !self.folded[seat] {
             return true;
         }
         self.phase == Phase::Done
@@ -656,12 +671,25 @@ impl Minigame for Poker {
         let mut rng = StdRng::seed_from_u64(seed);
         let button = rng.random_range(0..=1usize); // who starts on the button
 
+        // TV mode: the platform minigame library injects `settings.seat_kinds` — the seat-ordered
+        // occupant kinds ("champion" | "human" | "bot") derived from the world's MatchConfig. Open
+        // the spectator's hole cards only when EVERY seat is a champion (an all-AI table, no seated
+        // human whose opponent a second tab could spy on). Fail CLOSED: absent / wrong length / any
+        // non-"champion" / non-string ⇒ hidden, so an older library (no seat_kinds) behaves as before.
+        let open_hands = settings
+            .get("seat_kinds")
+            .and_then(|v| v.as_array())
+            .is_some_and(|kinds| {
+                kinds.len() == agents.len() && kinds.iter().all(|k| k.as_str() == Some("champion"))
+            });
+
         let ph = Card { rank: 2, suit: 0 };
         let mut g = Poker {
             players: agents.to_vec(),
             rng,
             button,
             hand_no: 1,
+            open_hands,
             stack: [STARTING_STACK; 2],
             hole: [[ph; 2]; 2],
             board_full: Vec::new(),
@@ -923,6 +951,12 @@ mod tests {
     /// A game seeded for reproducibility, hand 1 dealt.
     fn game(seed: u64) -> Poker {
         Poker::new(&two(), &json!({ "seed": seed })).unwrap()
+    }
+
+    /// A game with `seat_kinds` injected — the platform's TV-mode signal. `["champion",
+    /// "champion"]` opens the spectator's hole cards; anything else fails closed.
+    fn game_with_kinds(seed: u64, kinds: Value) -> Poker {
+        Poker::new(&two(), &json!({ "seed": seed, "seat_kinds": kinds })).unwrap()
     }
 
     /// A full snapshot of every mutable field (except the opaque RNG, which a rejected move
@@ -1254,6 +1288,195 @@ mod tests {
         // Sanity: bob's own view carries bob's cards (so the leak checks aren't vacuous).
         let b_view_s = g.observe(Some(bob)).to_string();
         assert!(bob_cards.iter().all(|c| b_view_s.contains(c)));
+    }
+
+    /// TV mode: an all-champion table opens BOTH live hands to the anonymous spectator — but an
+    /// opponent still never sees the other seat's live cards, so the champions keep playing
+    /// hidden-information poker.
+    #[test]
+    fn open_hands_spectator_sees_both_live_hands() {
+        let g = game_with_kinds(2, json!(["champion", "champion"]));
+        let alice = &g.players[0];
+        let bob = &g.players[1];
+        let alice_cards: Vec<String> = g.hole[0].iter().map(|c| c.to_code()).collect();
+        let bob_cards: Vec<String> = g.hole[1].iter().map(|c| c.to_code()).collect();
+
+        // The spectator (viewer None) sees both live hands face-up — structured and by raw code.
+        let public = g.observe(None);
+        assert!(
+            public["players"][0]["hole"].is_array(),
+            "TV mode: spectator sees seat 0's hand"
+        );
+        assert!(
+            public["players"][1]["hole"].is_array(),
+            "TV mode: spectator sees seat 1's hand"
+        );
+        let public_s = public.to_string();
+        for c in alice_cards.iter().chain(bob_cards.iter()) {
+            assert!(public_s.contains(c), "TV-mode spectator must show {c}");
+        }
+
+        // An OPPONENT's view is unchanged: each agent sees only its own cards.
+        let a_view = g.observe(Some(alice));
+        assert!(
+            a_view["players"][0]["hole"].is_array(),
+            "alice sees her own cards"
+        );
+        assert!(
+            a_view["players"][1]["hole"].is_null(),
+            "alice must not see bob's live cards even in TV mode"
+        );
+        let b_view = g.observe(Some(bob));
+        assert!(
+            b_view["players"][1]["hole"].is_array(),
+            "bob sees his own cards"
+        );
+        assert!(
+            b_view["players"][0]["hole"].is_null(),
+            "bob must not see alice's live cards even in TV mode"
+        );
+
+        // Raw-string leak checks: neither opponent's tokens appear in the other's projection.
+        let a_view_s = a_view.to_string();
+        for c in &bob_cards {
+            assert!(!a_view_s.contains(c), "alice's projection leaked bob's {c}");
+        }
+        let b_view_s = b_view.to_string();
+        for c in &alice_cards {
+            assert!(!b_view_s.contains(c), "bob's projection leaked alice's {c}");
+        }
+    }
+
+    /// A folded hand is mucked from the TV-mode spectator (never revealed), while the live hand
+    /// stays face-up — including through the next hand after a fold resolves. Heads-up folds
+    /// resolve the hand instantly, so the observable folded-and-mucked state is the match-ending
+    /// fold; a non-terminal fold is where "stays visible through the next hand" is checked.
+    #[test]
+    fn open_hands_mucks_a_folded_hand_but_keeps_the_live_one() {
+        let mut g = game_with_kinds(2, json!(["champion", "champion"]));
+
+        // A non-terminal fold: the pot is pushed, hand 2 deals, and BOTH fresh live hands are
+        // face-up to the spectator again. last_hand.note names the fold.
+        g.apply(&g.players[g.to_act].clone(), "fold").unwrap();
+        let next = g.observe(None);
+        assert_eq!(next["hand"], 2, "the fold resolved the hand");
+        assert!(
+            next["last_hand"]["note"].as_str().unwrap().contains("fold"),
+            "last_hand.note names the fold: {}",
+            next["last_hand"]["note"]
+        );
+        for p in next["players"].as_array().unwrap() {
+            assert!(
+                p["hole"].is_array(),
+                "both live hands stay face-up to the spectator through the next hand"
+            );
+        }
+
+        // Walk to the 24-hand cap by folding every hand (the button, facing the big blind, may
+        // always fold pre-flop). The FINAL fold ends the match with the folder's hand mucked and
+        // the winner's live hand still face-up to the spectator.
+        while g.phase == Phase::Playing {
+            g.apply(&g.players[g.to_act].clone(), "fold").unwrap();
+        }
+        let folder = (0..PLAYERS).find(|&s| g.folded[s]).expect("a seat folded");
+        let winner = 1 - folder;
+        let ended = g.observe(None);
+        assert!(
+            ended["players"][folder]["hole"].is_null(),
+            "the folded hand is mucked from the spectator"
+        );
+        assert!(
+            ended["players"][winner]["hole"].is_array(),
+            "the live hand stays visible to the spectator"
+        );
+    }
+
+    /// FAIL-CLOSED: anything but an all-"champion" array of the right length hides the live hands
+    /// from the spectator — exactly today's behaviour, so an older library (no seat_kinds) is safe.
+    #[test]
+    fn open_hands_fails_closed_on_non_champion_seat_kinds() {
+        for kinds in [
+            json!(["champion", "human"]),    // a seated human — never open
+            json!(["human", "bot"]),         // no champion at all
+            json!(["champion"]),             // wrong length (short)
+            json!("champion"),               // not an array
+            json!([]),                       // empty
+            json!([1, 2]),                   // non-strings
+            json!(["Champion", "Champion"]), // wrong case — kinds ride the wire lowercase
+        ] {
+            let g = game_with_kinds(9, kinds.clone());
+            let public = g.observe(None);
+            for p in public["players"].as_array().unwrap() {
+                assert!(
+                    p["hole"].is_null(),
+                    "fail-closed: {kinds} must hide live holes, got {}",
+                    p["hole"]
+                );
+            }
+        }
+    }
+
+    /// The hand counter advances ONLY when a hand resolves (fold or showdown), never on a
+    /// mid-hand betting action — the property the `hand` field promises.
+    #[test]
+    fn hand_counter_advances_only_on_resolution() {
+        let handno = |g: &Poker| g.observe(None)["hand"].as_u64().unwrap();
+
+        // A whole hand of non-terminal actions keeps `hand` at 1; the fold that ends the hand
+        // bumps it to exactly 2 and names the fold.
+        let mut g = game(4);
+        let btn = g.players[g.button].clone();
+        let bb = g.players[1 - g.button].clone();
+        assert_eq!(handno(&g), 1);
+        g.apply(&btn, "call").unwrap(); // SB completes
+        assert_eq!(handno(&g), 1);
+        g.apply(&bb, "check").unwrap(); // → flop
+        assert_eq!(handno(&g), 1);
+        assert_eq!(g.street, Street::Flop);
+        g.apply(&bb, "check").unwrap(); // flop: non-button acts first
+        assert_eq!(handno(&g), 1);
+        g.apply(&btn, "check").unwrap(); // → turn
+        assert_eq!(handno(&g), 1);
+        assert_eq!(g.street, Street::Turn);
+        g.apply(&bb, "raise:4").unwrap(); // a bet …
+        assert_eq!(handno(&g), 1);
+        g.apply(&btn, "call").unwrap(); // … and a call → river
+        assert_eq!(handno(&g), 1);
+        assert_eq!(g.street, Street::River);
+        g.apply(&bb, "raise:8").unwrap(); // a river bet …
+        assert_eq!(handno(&g), 1);
+        g.apply(&btn, "fold").unwrap(); // … folded to
+        assert_eq!(
+            handno(&g),
+            2,
+            "the fold resolved the hand → counter advances once"
+        );
+        assert!(g.observe(None)["last_hand"]["note"]
+            .as_str()
+            .unwrap()
+            .contains("fold"));
+
+        // Separately, an all-in call to showdown advances the counter exactly once too. Rig a
+        // guaranteed SPLIT (both play the board's four aces) so the showdown resolves WITHOUT a
+        // bust — a full-stack all-in that busts a seat would END the match, not advance the hand.
+        let mut g2 = game(8);
+        let card = |c: &str| Card::from_code(c).unwrap();
+        g2.hole[0] = [card("2c"), card("3c")];
+        g2.hole[1] = [card("4d"), card("5d")];
+        g2.board_full = ["Ah", "Ad", "Ac", "As", "Kh"]
+            .iter()
+            .map(|&c| card(c))
+            .collect();
+        let b2 = g2.button;
+        assert_eq!(handno(&g2), 1);
+        g2.apply(&g2.players[b2].clone(), "allin").unwrap();
+        assert_eq!(handno(&g2), 1, "the jam alone doesn't resolve the hand");
+        g2.apply(&g2.players[1 - b2].clone(), "call").unwrap();
+        assert_eq!(
+            handno(&g2),
+            2,
+            "the called showdown resolved the hand → counter advances once"
+        );
     }
 
     /// The shipped game.toml must parse and its hold must validate — green CI implies a bootable

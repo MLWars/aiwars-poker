@@ -113,6 +113,15 @@
       #fin .big { font-size: 26px; font-weight: 800; color: #7ee787; text-shadow: 0 2px 16px #000a; }
       #fin .sub { margin-top: 6px; color: #e7e7ea; font-size: 14px; }
 
+      /* hand-result beat — a transient pill over the middle band between hands (app.js toggles
+         .on, then fades). Non-blocking and it wraps, so it never clips a 390px phone. */
+      #beat { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        z-index: 6; max-width: 86%; padding: 8px 14px; border-radius: 12px;
+        background: #0b0c10e6; border: 1px solid #ffffff26; box-shadow: 0 6px 22px #0009;
+        color: #e7e7ea; font-size: 12.5px; font-weight: 700; line-height: 1.35; text-align: center;
+        pointer-events: none; opacity: 0; transition: opacity .35s ease; }
+      #beat.on { opacity: 1; }
+
       /* replay transport (?replay) — hidden in live mode; app.js reveals it */
       #controls { display: none; align-items: center; justify-content: center; flex-wrap: wrap;
         gap: 7px; flex: 0 0 auto; }
@@ -148,6 +157,7 @@
             <div class="who"><span class="nm">—</span></div>
           </div>
           <div id="fin"><div class="big"></div><div class="sub"></div></div>
+          <div id="beat"></div>
         </div>
       </div>
       <div id="controls">
