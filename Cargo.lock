@@ -14,7 +14,7 @@ dependencies = [
 [[package]]
 name = "aiwars-minigame"
 version = "0.1.0"
-source = "git+https://github.com/AsafFisher/AIWars?rev=af88d7c#af88d7c66fb1c956ea211c52eced32ccf1cea874"
+source = "git+https://github.com/AsafFisher/AIWars?rev=40889d82277541c3059af7fe909945a13937b773#40889d82277541c3059af7fe909945a13937b773"
 dependencies = [
  "anyhow",
  "axum",
@@ -737,7 +737,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.1.0"
-source = "git+https://github.com/AsafFisher/AIWars?rev=af88d7c#af88d7c66fb1c956ea211c52eced32ccf1cea874"
+source = "git+https://github.com/AsafFisher/AIWars?rev=40889d82277541c3059af7fe909945a13937b773#40889d82277541c3059af7fe909945a13937b773"
 dependencies = [
  "serde",
  "serde_json",

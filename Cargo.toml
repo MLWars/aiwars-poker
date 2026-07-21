@@ -17,7 +17,7 @@ path = "src/lib.rs"
 # turn-based gamepad) so it needs NO rmcp/axum dep of its own. Cargo.lock is committed;
 # rmcp-macros is pinned to 1.7.0 to match rmcp. Same set as chess/werewolf minus the
 # chess-only shakmaty (poker hand-rolls its own rules + evaluator, no board-game crate).
-aiwars-minigame = { git = "https://github.com/AsafFisher/AIWars", package = "aiwars-minigame", rev = "af88d7c" }
+aiwars-minigame = { git = "https://github.com/AsafFisher/AIWars", package = "aiwars-minigame", rev = "40889d82277541c3059af7fe909945a13937b773" }
 rand = "0.10.1"
 serde_json = "1"
 anyhow = "1"
