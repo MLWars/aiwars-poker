@@ -7,10 +7,11 @@
     <title>AIWars — poker table</title>
     <!--
       Heads-up Hold'em felt table. A vertical stack (opponent → board+pot → hero → status)
-      so it never overflows a phone: cards, chips and labels scale to the frame, wide content
-      only ever grows the fixed table, never the page. Self-contained on purpose — no external
-      assets: this file also ships inside the game pod. Presentation only; all data plumbing
-      lives in app.js.
+      that never overflows a phone because every metric inside the felt is a calc() of one knob,
+      --cw (the card width in px that app.js's fitTable sets on #table), so the contents scale to
+      the frame by construction and wide content only ever grows the fixed table, never the page.
+      Self-contained on purpose — no external assets: this file also ships inside the game pod.
+      Presentation only; all data plumbing lives in app.js.
     -->
     <style>
       :root { color-scheme: dark; }
@@ -32,58 +33,60 @@
       /* the felt table — a fixed box centred in the free space, never the page scroller */
       .tablewrap { flex: 1 1 auto; min-height: 0; width: 100%; display: flex;
         align-items: center; justify-content: center; }
-      #table { position: relative; width: min(100%, 460px); aspect-ratio: 3 / 4;
+      #table { --cw: 42px; position: relative; width: min(100%, 460px); aspect-ratio: 3 / 4;
         max-height: 100%;
         background: radial-gradient(ellipse at center, #1f7a4d 0%, #14603b 62%, #0d4429 100%);
         border-radius: 46% / 34%; border: 6px solid #6b4423;
         box-shadow: inset 0 0 40px #0007, 0 14px 40px rgba(0,0,0,.55);
         display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-        padding: 18px 12px; }
+        padding: calc(var(--cw) * 0.36) calc(var(--cw) * 0.24); }
 
       /* a seat: name + stack, its two cards, and its current bet */
-      .seat { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
+      .seat { display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.10); width: 100%; }
       .seat.folded { opacity: .45; }
       .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 700;
+        font-size: calc(var(--cw) * 0.28);
         background: #0b0c10cc; border: 1px solid #ffffff1a; border-radius: 999px;
-        padding: 3px 11px; max-width: 92%; }
+        padding: calc(var(--cw) * 0.06) calc(var(--cw) * 0.22); max-width: 92%; }
       .who .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .who .st { color: #ffd76a; font-variant-numeric: tabular-nums; }
-      .who .dealer { width: 17px; height: 17px; border-radius: 50%; background: #f2f2f2;
-        color: #14603b; font-size: 11px; font-weight: 800; display: inline-flex;
+      .who .dealer { width: calc(var(--cw) * 0.34); height: calc(var(--cw) * 0.34); border-radius: 50%; background: #f2f2f2;
+        color: #14603b; font-size: calc(var(--cw) * 0.22); font-weight: 800; display: inline-flex;
         align-items: center; justify-content: center; box-shadow: 0 1px 3px #0007; }
       .turn .who { box-shadow: 0 0 0 2px #7ee787, 0 0 14px #7ee78766; }
-      .allin-tag { font-size: 10px; letter-spacing: 1px; color: #ff9d9d; font-weight: 800; }
+      .allin-tag { font-size: calc(var(--cw) * 0.20); letter-spacing: 1px; color: #ff9d9d; font-weight: 800; }
 
       /* cards */
-      .hand { display: flex; gap: 5px; }
-      .card { width: clamp(30px, 11vw, 50px); aspect-ratio: 5 / 7;
-        border-radius: 6px; position: relative; user-select: none;
+      .hand { display: flex; gap: calc(var(--cw) * 0.10); }
+      .card { width: var(--cw); aspect-ratio: 5 / 7;
+        border-radius: calc(var(--cw) * 0.12); position: relative; user-select: none;
         display: flex; align-items: center; justify-content: center;
         font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
       .card.up { background: linear-gradient(#fff, #eef0f4); color: #14161c; }
       .card.up.red { color: #d1263b; }
-      .card .rk { position: absolute; top: 3px; left: 5px; font-size: 13px; line-height: 1; }
-      .card .pip { font-size: 20px; }
+      .card .rk { position: absolute; top: calc(var(--cw) * 0.06); left: calc(var(--cw) * 0.10); font-size: calc(var(--cw) * 0.26); line-height: 1; }
+      .card .pip { font-size: calc(var(--cw) * 0.40); }
       .card.down { background: repeating-linear-gradient(45deg, #2a3550 0 6px, #212a40 6px 12px);
         border: 1px solid #3a4666; }
       .card.slot { background: #0d3a25; border: 1px dashed #ffffff26; box-shadow: none; }
 
       /* the community board + the pot chips in the middle band */
-      .middle { display: flex; flex-direction: column; align-items: center; gap: 8px;
-        container-type: inline-size; width: 100%; }
-      .board { display: flex; gap: 5px; }
+      .middle { display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.16);
+        width: 100%; }
+      .board { display: flex; gap: calc(var(--cw) * 0.10); }
       .pot { display: inline-flex; align-items: center; gap: 8px;
         background: #0b0c10cc; border: 1px solid #ffffff1a; border-radius: 999px;
-        padding: 3px 12px 3px 8px; font-weight: 800; }
-      .pot .chips { position: relative; width: 20px; height: 16px; }
-      .pot .chips i { position: absolute; left: 0; width: 20px; height: 6px; border-radius: 50%;
+        padding: calc(var(--cw) * 0.06) calc(var(--cw) * 0.24) calc(var(--cw) * 0.06) calc(var(--cw) * 0.16);
+        font-weight: 800; font-size: calc(var(--cw) * 0.28); }
+      .pot .chips { position: relative; width: calc(var(--cw) * 0.40); height: calc(var(--cw) * 0.32); }
+      .pot .chips i { position: absolute; left: 0; width: calc(var(--cw) * 0.40); height: calc(var(--cw) * 0.12); border-radius: 50%;
         background: linear-gradient(#e8556a, #b8324a); border: 1px solid #00000055; }
       .pot .amt { color: #ffd76a; font-variant-numeric: tabular-nums; }
 
       /* per-seat bet blob */
-      .bet { min-height: 20px; display: flex; align-items: center; gap: 6px; font-weight: 700;
-        color: #ffd76a; font-size: 12.5px; }
-      .bet .chip { width: 14px; height: 14px; border-radius: 50%;
+      .bet { min-height: calc(var(--cw) * 0.40); display: flex; align-items: center; gap: calc(var(--cw) * 0.12); font-weight: 700;
+        color: #ffd76a; font-size: calc(var(--cw) * 0.25); }
+      .bet .chip { width: calc(var(--cw) * 0.28); height: calc(var(--cw) * 0.28); border-radius: 50%;
         background: linear-gradient(#e8556a, #b8324a); border: 1px solid #00000055;
         box-shadow: 0 1px 2px #0007; }
 
@@ -148,7 +151,7 @@
           </div>
           <div class="middle">
             <div class="bet" id="bet-top"></div>
-            <div class="pot"><span class="chips"><i style="top:8px"></i><i style="top:4px"></i><i style="top:0"></i></span><span class="amt" id="pot">0</span></div>
+            <div class="pot"><span class="chips"><i style="top:calc(var(--cw)*0.16)"></i><i style="top:calc(var(--cw)*0.08)"></i><i style="top:0"></i></span><span class="amt" id="pot">0</span></div>
             <div class="board" id="board"></div>
             <div class="bet" id="bet-bot"></div>
           </div>

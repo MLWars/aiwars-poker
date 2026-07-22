@@ -439,16 +439,26 @@ function bindControls() {
 }
 
 // ---- Table fit — the pixel authority ------------------------------------------------
-// The table is the largest 3:4 box that fits .tablewrap. The stylesheet's aspect-ratio +
-// max-height say that, but real phones have misresolved intrinsic sizing against the iframe
-// viewport (the chess board hit exactly this), so raw pixels from a ResizeObserver own the
-// final width; height follows from aspect-ratio.
+// The table is the largest ≤3:4 box that fits .tablewrap. `--cw` (card width in px) is the
+// ONE sizing knob: every table metric in the stylesheet is a calc() of it, so the contents
+// fit by construction at any box shape — no overflow, ever. fitTable() solves the largest cw
+// that fits BOTH axes and writes it (with the box's explicit px width+height) onto #table.
+// Phone iframes are short and wide; the old 11vw cards clipped, which this replaces.
 function fitTable() {
   const wrap = document.querySelector(".tablewrap");
   const table = el("table");
   if (!wrap || !table) return;
-  const w = Math.min(wrap.clientWidth, (wrap.clientHeight * 3) / 4, 460);
-  if (w > 0) table.style.width = `${Math.floor(w)}px`;
+  const wrapW = wrap.clientWidth, wrapH = wrap.clientHeight;
+  if (wrapW <= 0 || wrapH <= 0) return;
+  const tableW = Math.min(wrapW, 460);
+  const tableH = Math.min(wrapH, (tableW * 4) / 3);
+  // Largest card that fits: vertically the stack sums to ~8.3 card-widths (+20px fixed
+  // border/rounding slack); horizontally the 5-card board needs ~5.9 (+12px border).
+  const cw = Math.min((tableH - 20) / 8.3, (tableW - 12) / 5.9, 50);
+  if (cw <= 0) return;
+  table.style.width = `${Math.floor(tableW)}px`;
+  table.style.height = `${Math.floor(tableH)}px`;
+  table.style.setProperty("--cw", `${Math.floor(cw * 10) / 10}px`);
 }
 const wrapEl = document.querySelector(".tablewrap");
 if (wrapEl) new ResizeObserver(fitTable).observe(wrapEl);
