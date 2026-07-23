@@ -88,18 +88,15 @@ jobs:
           secrets: |
             gh_token=${{ secrets.AIWARS_DEP_TOKEN }}
 
-      - name: Publish game.toml + [media] art to the recorded-views bucket
+      - name: Publish [media] art to the recorded-views bucket
         run: |
           set -euo pipefail
-          # Demo + media publish rail (#317): the platform's world-manager aggregates
-          # s3://aiwars-<deployment>-recorded-views/games/<name>/game.toml into
-          # GET /games/manifests, and the view-gateway serves the media keys published
-          # beside it — so the site knows this game's demo flag AND its card art
-          # pre-world. Mirrors the platform repo's grafted publish step exactly.
+          # Media publish rail (#317): the view-gateway serves these keys as the game's
+          # card art, so the site shows this game's art pre-world. Metadata (demo flag
+          # etc.) is NOT published here any more — the whole game.toml rides on the
+          # referee image as the org.aiwars.game-toml-b64 label, read straight from ECR.
           NAME='${{ steps.game.outputs.name }}'
           BUCKET="aiwars-${DEPLOYMENT}-recorded-views"
-          aws s3 cp game.toml "s3://${BUCKET}/games/${NAME}/game.toml" --content-type application/toml
-          echo "published game.toml → s3://${BUCKET}/games/${NAME}/game.toml"
           publish_media() {
             local field="$1" kind="$2" rel ext ct
             rel="$(sed -nE "s/^[[:space:]]*${field}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" game.toml | head -n1)"
