@@ -6,18 +6,76 @@
     <meta name="referrer" content="no-referrer" />
     <title>AIWars — poker table</title>
     <!--
-      Heads-up Hold'em felt table. A vertical stack (opponent → board+pot → hero → status)
-      that never overflows a phone because every metric inside the felt is a calc() of one knob,
-      --cw (the card width in px that app.js's fitTable sets on #table), so the contents scale to
-      the frame by construction and wide content only ever grows the fixed table, never the page.
+      Heads-up Hold'em table, dressed as a neon casino — the same light language as the
+      LINE WARS view (deep blue-black stage, cyan/pink/gold trio, phosphor console green),
+      with the felt ringed by a glowing tube that throws colour back onto the cloth.
+      A vertical stack (opponent → board+pot → hero → status) that never overflows a phone
+      because every metric inside the felt is a calc() of one knob, --cw (the card width in
+      px that app.js's fitTable sets on #table), so the contents scale to the frame by
+      construction and wide content only ever grows the fixed table, never the page.
+      How bright the neon burns is five scalars on :root (see the style block) — one design,
+      one dial, nothing in the UI toggles it.
       Self-contained on purpose — no external assets: this file also ships inside the game pod.
       Presentation only; all data plumbing lives in app.js.
     -->
     <style>
-      :root { color-scheme: dark; }
+      /* ---- palette + the intensity dial ----------------------------------------------
+         The whole look is one token set. The five scalars below are the entire "how much
+         neon" dial and every colour after them is derived from them; the shipped values
+         are the balanced-vivid level. --tube-alpha is a mix ratio and tops out at 1; the
+         other four may be driven to 1.4 — past that the derived color-mix() percentages
+         leave 0–100% and the declarations that use them drop out. */
+      :root {
+        color-scheme: dark;
+        /* line-wars' palette, so the two views speak the same light */
+        --bg0: #0a0b11; --ink: #eef1f8; --dim: #8b93a7;
+        --cyan: #38e1ff; --pink: #ff5db1; --gold: #ffd23f; --phos: #b8f5cf;
+        --panel: #14162199; --edge: #ffffff14;
+        /* the rim's thickness. NOT a --cw metric: fitTable() budgets the table's border as
+           fixed px, so the tube is the one fixed frame around the cw-scaled guts. */
+        --rim: 6px;
+
+        --tube-alpha: .85; /* how hot the rim tube burns (0…1) */
+        --glow: 1;         /* bloom multiplier — the tube's outward glow and inward cast */
+        --wash: 1;         /* strength of the stage's radial washes */
+        --ring2: 0;        /* the second, detached tube ring */
+        --lit: .3;         /* extra glow on chips, card backs and board slots */
+
+        /* derived — a function of the five knobs above and nothing else. --tube-off is the
+           colour an unlit tube would be; every tube stop fades toward it as the dial drops. */
+        --tube-off: #1b2340;
+        --wash-top: color-mix(in srgb, #234c76 calc(var(--wash) * 70%), transparent);
+        --wash-bot: color-mix(in srgb, #471769 calc(var(--wash) * 70%), transparent);
+        --tube-a: color-mix(in srgb, #8ff2ff calc(var(--tube-alpha) * 100%), var(--tube-off));
+        --tube-b: color-mix(in srgb, #9b6cff calc(var(--tube-alpha) * 100%), var(--tube-off));
+        --tube-c: color-mix(in srgb, #ff6fbc calc(var(--tube-alpha) * 100%), var(--tube-off));
+        /* the tight halo hugging the glass, the wide bloom it throws into the room, and the
+           colour it casts back inward across the cloth */
+        --tube-lit-cool: color-mix(in srgb, var(--cyan) calc(16% + var(--glow) * 30%), transparent);
+        --tube-lit-hot: color-mix(in srgb, var(--pink) calc(14% + var(--glow) * 26%), transparent);
+        --bloom-cool: color-mix(in srgb, var(--cyan) calc(var(--glow) * 24%), transparent);
+        --bloom-hot: color-mix(in srgb, var(--pink) calc(var(--glow) * 20%), transparent);
+        --cast-cool: color-mix(in srgb, var(--cyan) calc(var(--glow) * 45%), transparent);
+        --cast-hot: color-mix(in srgb, var(--pink) calc(var(--glow) * 38%), transparent);
+        --cast-core: color-mix(in srgb, #dff6ff calc(var(--tube-alpha) * 30%), transparent);
+        --ring2-col: color-mix(in srgb, var(--pink) calc(var(--ring2) * 60%), transparent);
+        /* money and the turn keep a floor of glow at every level — they are the two things
+           that must read as "live" even when the rest of the neon is turned down */
+        --gold-glow: color-mix(in srgb, var(--gold) calc(18% + var(--glow) * 18%), transparent);
+        --turn-glow: color-mix(in srgb, var(--gold) calc(20% + var(--glow) * 20%), transparent);
+        --lit-cool: color-mix(in srgb, var(--cyan) calc(var(--lit) * 50%), transparent);
+        --lit-hot: color-mix(in srgb, var(--pink) calc(var(--lit) * 50%), transparent);
+        --lit-gold: color-mix(in srgb, var(--gold) calc(var(--lit) * 45%), transparent);
+        --weave-cool: color-mix(in srgb, var(--cyan) calc(26% + var(--lit) * 40%), transparent);
+        --weave-hot: color-mix(in srgb, var(--pink) calc(22% + var(--lit) * 40%), transparent);
+      }
       * { box-sizing: border-box; margin: 0; }
       html, body { height: 100%; overflow: hidden;
-        background: #0f1014; color: #e7e7ea;
+        background:
+          radial-gradient(1100px 640px at 50% -12%, var(--wash-top) 0%, transparent 62%),
+          radial-gradient(900px 560px at 50% 116%, var(--wash-bot) 0%, transparent 58%),
+          var(--bg0);
+        color: var(--ink);
         font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         -webkit-font-smoothing: antialiased; }
       #app { height: 100%; display: flex; flex-direction: column; align-items: center;
@@ -25,115 +83,187 @@
 
       /* meta row (blinds / hand no) */
       .meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
-        font-size: 12.5px; color: #9aa0aa; }
-      .meta b { color: #e7e7ea; }
-      .badge { padding: 2px 9px; border-radius: 999px; background: #1a1b22;
-        border: 1px solid #2a2c36; font-weight: 700; color: #e7e7ea; }
+        font-size: 12.5px; color: var(--dim); }
+      .meta b { color: var(--ink); }
+      .meta #potmeta { color: var(--gold); text-shadow: 0 0 14px var(--gold-glow); }
+      .badge { padding: 2px 9px; border-radius: 999px; background: var(--panel);
+        border: 1px solid var(--edge); font-weight: 700; color: var(--ink); }
 
-      /* the felt table — a fixed box centred in the free space, never the page scroller */
+      /* the felt table — a fixed box centred in the free space, never the page scroller.
+         The rim is a neon tube: the gradient paints the border box, the felt the padding
+         box, and the shadow stack is the light it makes — an outward bloom plus the colour
+         it casts back inward onto the cloth (cyan from the top, pink from the bottom). */
       .tablewrap { flex: 1 1 auto; min-height: 0; width: 100%; display: flex;
         align-items: center; justify-content: center; }
       #table { --cw: 42px; position: relative; width: min(100%, 460px); aspect-ratio: 3 / 4;
         max-height: 100%;
-        background: radial-gradient(ellipse at center, #1f7a4d 0%, #14603b 62%, #0d4429 100%);
-        border-radius: 46% / 34%; border: 6px solid #6b4423;
-        box-shadow: inset 0 0 40px #0007, 0 14px 40px rgba(0,0,0,.55);
+        background:
+          radial-gradient(ellipse at 50% 44%, #2b3378 0%, #1b1f4d 44%, #101233 72%, #090a19 100%) padding-box,
+          linear-gradient(168deg, var(--tube-a) 0%, var(--tube-b) 50%, var(--tube-c) 100%) border-box;
+        border: var(--rim) solid transparent; border-radius: 46% / 34%;
+        box-shadow:
+          0 calc(var(--cw) * -0.14) calc(var(--cw) * 0.32) var(--tube-lit-cool),
+          0 calc(var(--cw) * 0.14) calc(var(--cw) * 0.32) var(--tube-lit-hot),
+          0 0 calc(var(--cw) * 0.9 * var(--glow)) var(--bloom-cool),
+          0 0 calc(var(--cw) * 2.2 * var(--glow)) var(--bloom-hot),
+          0 calc(var(--cw) * 0.3) calc(var(--cw) * 0.9) #000000a6,
+          inset 0 0 calc(var(--cw) * 0.16) var(--cast-core),
+          inset 0 calc(var(--cw) * 0.2) calc(var(--cw) * 0.95) var(--cast-cool),
+          inset 0 calc(var(--cw) * -0.2) calc(var(--cw) * 0.95) var(--cast-hot),
+          inset 0 0 calc(var(--cw) * 1.8) #00000059;
         display: flex; flex-direction: column; align-items: center; justify-content: space-between;
         padding: calc(var(--cw) * 0.36) calc(var(--cw) * 0.24); }
+      /* the second tube: a concentric ring standing off the first one, lit only at the top
+         of the dial. Insetting by -(--rim) puts the pseudo-element's box on the tube's own
+         outer edge (so it claims no scrollable area the table doesn't already claim) and the
+         ring itself is an outline, which holds the gap and takes no part in layout. */
+      #table::after { content: ""; position: absolute; inset: calc(var(--rim) * -1); border-radius: inherit;
+        pointer-events: none;
+        outline: max(1px, calc(var(--cw) * 0.03)) solid var(--ring2-col);
+        outline-offset: calc(var(--cw) * 0.14);
+        box-shadow: 0 0 calc(var(--cw) * 0.5) calc(var(--cw) * 0.14) var(--ring2-col); }
 
-      /* a seat: name + stack, its two cards, and its current bet */
+      /* a seat: name + stack, its two cards, and its current bet. Identity lives in the
+         neon trio — the hero (bottom row; the viewer's own seat in seat mode) is cyan, the
+         opponent pink — and the middle band's bet blob carries its seat's colour with it. */
+      #seat-bot, #bet-bot { --id: var(--cyan); }
+      #seat-top, #bet-top { --id: var(--pink); }
       .seat { display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.10); width: 100%; }
       .seat.folded { opacity: .45; }
-      .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 700;
+      .who { display: inline-flex; align-items: center; gap: calc(var(--cw) * 0.14); font-weight: 700;
         font-size: calc(var(--cw) * 0.28);
-        background: #0b0c10cc; border: 1px solid #ffffff1a; border-radius: 999px;
+        background: var(--panel); border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--id) 55%, transparent);
+        box-shadow: 0 0 calc(var(--cw) * 0.5) color-mix(in srgb, var(--id) calc(var(--glow) * 22%), transparent),
+          inset 0 0 calc(var(--cw) * 0.4) color-mix(in srgb, var(--id) calc(var(--glow) * 10%), transparent);
         padding: calc(var(--cw) * 0.06) calc(var(--cw) * 0.22); max-width: 92%; }
       .who .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .who .st { color: #ffd76a; font-variant-numeric: tabular-nums; }
-      .who .dealer { width: calc(var(--cw) * 0.34); height: calc(var(--cw) * 0.34); border-radius: 50%; background: #f2f2f2;
-        color: #14603b; font-size: calc(var(--cw) * 0.22); font-weight: 800; display: inline-flex;
-        align-items: center; justify-content: center; box-shadow: 0 1px 3px #0007; }
-      .turn .who { box-shadow: 0 0 0 2px #7ee787, 0 0 14px #7ee78766; }
-      .allin-tag { font-size: calc(var(--cw) * 0.20); letter-spacing: 1px; color: #ff9d9d; font-weight: 800; }
+      .who .st { color: var(--phos); font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 calc(var(--cw) * 0.3) color-mix(in srgb, var(--phos) calc(var(--glow) * 35%), transparent); }
+      /* dealer button: a lit gold ring, not a plastic disc */
+      .who .dealer { width: calc(var(--cw) * 0.34); height: calc(var(--cw) * 0.34); border-radius: 50%;
+        flex: 0 0 auto; background: #0b0c14cc;
+        color: var(--gold); font-size: calc(var(--cw) * 0.22); font-weight: 800; display: inline-flex;
+        align-items: center; justify-content: center;
+        box-shadow: inset 0 0 0 max(1px, calc(var(--cw) * 0.04)) var(--gold),
+          0 0 calc(var(--cw) * 0.34) var(--gold-glow); }
+      /* the turn spotlight — gold, the colour kept for energy */
+      .turn .who { border-color: var(--gold);
+        box-shadow: 0 0 0 max(1px, calc(var(--cw) * 0.04)) var(--gold),
+          0 0 calc(var(--cw) * 0.9) var(--turn-glow); }
+      .allin-tag { font-size: calc(var(--cw) * 0.20); letter-spacing: 1px; color: var(--pink); font-weight: 800;
+        text-shadow: 0 0 calc(var(--cw) * 0.3) color-mix(in srgb, var(--pink) calc(var(--glow) * 60%), transparent); }
 
-      /* cards */
+      /* cards — faces stay light and high-contrast (they are the thing you must read),
+         cut from the felt by a dark keyline; the backs are the showy ones: deep violet
+         under a cyan/pink neon weave */
       .hand { display: flex; gap: calc(var(--cw) * 0.10); }
       .card { width: var(--cw); aspect-ratio: 5 / 7;
         border-radius: calc(var(--cw) * 0.12); position: relative; user-select: none;
         display: flex; align-items: center; justify-content: center;
-        font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
-      .card.up { background: linear-gradient(#fff, #eef0f4); color: #14161c; }
-      .card.up.red { color: #d1263b; }
+        font-weight: 800; box-shadow: 0 calc(var(--cw) * 0.05) calc(var(--cw) * 0.16) #00000073; }
+      .card.up { background: linear-gradient(#ffffff, #e7ecf7); color: #101219;
+        border: 1px solid #ffffff;
+        box-shadow: 0 0 0 1px #05060cb3,
+          0 calc(var(--cw) * 0.05) calc(var(--cw) * 0.16) #000000a6,
+          0 0 calc(var(--cw) * 0.32) color-mix(in srgb, var(--cyan) calc(var(--lit) * 32%), transparent); }
+      .card.up.red { color: #c73c3c; }
       .card .rk { position: absolute; top: calc(var(--cw) * 0.06); left: calc(var(--cw) * 0.10); font-size: calc(var(--cw) * 0.26); line-height: 1; }
       .card .pip { font-size: calc(var(--cw) * 0.40); }
-      .card.down { background: repeating-linear-gradient(45deg, #2a3550 0 6px, #212a40 6px 12px);
-        border: 1px solid #3a4666; }
-      .card.slot { background: #0d3a25; border: 1px dashed #ffffff26; box-shadow: none; }
+      .card.down {
+        background:
+          repeating-linear-gradient(45deg, transparent 0 calc(var(--cw) * 0.11), var(--weave-cool) calc(var(--cw) * 0.11) calc(var(--cw) * 0.14)),
+          repeating-linear-gradient(-45deg, transparent 0 calc(var(--cw) * 0.11), var(--weave-hot) calc(var(--cw) * 0.11) calc(var(--cw) * 0.14)),
+          linear-gradient(150deg, #2d1f6b, #1a1440 55%, #2a1259);
+        border: 1px solid #7c5cf0aa;
+        box-shadow: 0 calc(var(--cw) * 0.05) calc(var(--cw) * 0.16) #000000a6,
+          inset 0 0 calc(var(--cw) * 0.5) #8b5cf644,
+          0 0 calc(var(--cw) * 0.45) var(--lit-hot); }
+      .card.slot { background: #0a0c1c59;
+        border: 1px dashed color-mix(in srgb, var(--cyan) calc(28% + var(--lit) * 32%), transparent);
+        box-shadow: inset 0 0 calc(var(--cw) * 0.5) var(--lit-cool); }
 
-      /* the community board + the pot chips in the middle band */
+      /* the community board + the pot chips in the middle band — the pot is the gold one */
       .middle { display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.16);
         width: 100%; }
       .board { display: flex; gap: calc(var(--cw) * 0.10); }
-      .pot { display: inline-flex; align-items: center; gap: 8px;
-        background: #0b0c10cc; border: 1px solid #ffffff1a; border-radius: 999px;
+      .pot { display: inline-flex; align-items: center; gap: calc(var(--cw) * 0.18);
+        background: var(--panel); border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+        box-shadow: 0 0 calc(var(--cw) * 0.7) var(--gold-glow), inset 0 0 calc(var(--cw) * 0.5) #ffd23f1a;
         padding: calc(var(--cw) * 0.06) calc(var(--cw) * 0.24) calc(var(--cw) * 0.06) calc(var(--cw) * 0.16);
         font-weight: 800; font-size: calc(var(--cw) * 0.28); }
       .pot .chips { position: relative; width: calc(var(--cw) * 0.40); height: calc(var(--cw) * 0.32); }
       .pot .chips i { position: absolute; left: 0; width: calc(var(--cw) * 0.40); height: calc(var(--cw) * 0.12); border-radius: 50%;
-        background: linear-gradient(#e8556a, #b8324a); border: 1px solid #00000055; }
-      .pot .amt { color: #ffd76a; font-variant-numeric: tabular-nums; }
+        background: linear-gradient(#ffe89a, #e8a81e); border: 1px solid #00000059;
+        box-shadow: 0 0 calc(var(--cw) * 0.2) var(--lit-gold); }
+      .pot .amt { color: var(--gold); font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 calc(var(--cw) * 0.35) #ffd23fb3; }
 
-      /* per-seat bet blob */
+      /* per-seat bet blob — wears the seat's own colour, which leaves gold to mean the pot */
       .bet { min-height: calc(var(--cw) * 0.40); display: flex; align-items: center; gap: calc(var(--cw) * 0.12); font-weight: 700;
-        color: #ffd76a; font-size: calc(var(--cw) * 0.25); }
+        color: var(--id); font-size: calc(var(--cw) * 0.25);
+        text-shadow: 0 0 calc(var(--cw) * 0.3) color-mix(in srgb, var(--id) calc(var(--glow) * 40%), transparent); }
       .bet .chip { width: calc(var(--cw) * 0.28); height: calc(var(--cw) * 0.28); border-radius: 50%;
-        background: linear-gradient(#e8556a, #b8324a); border: 1px solid #00000055;
-        box-shadow: 0 1px 2px #0007; }
+        background: radial-gradient(circle at 35% 28%, #ffffffd9, var(--id) 60%, #00000055);
+        border: 1px solid #00000073;
+        box-shadow: 0 calc(var(--cw) * 0.02) calc(var(--cw) * 0.06) #000000a6,
+          0 0 calc(var(--cw) * 0.3) color-mix(in srgb, var(--id) calc(var(--lit) * 55%), transparent); }
 
       /* status + action bar */
-      #status { text-align: center; color: #9aa0aa; min-height: 16px; font-size: 12.5px; flex: 0 0 auto; }
-      #status b { color: #e7e7ea; }
-      .win { color: #7ee787; font-weight: 700; }
-      .off { color: #f2a0a0; }
-      .you { color: #7ee787; font-weight: 700; }
-      .sent { color: #cdd3dd; font-style: italic; }
+      #status { text-align: center; color: var(--dim); min-height: 16px; font-size: 12.5px; flex: 0 0 auto; }
+      #status b { color: var(--gold); font-weight: 800; } /* the actor pops out of the dim line */
+      .win { color: var(--phos); font-weight: 700; }
+      .off { color: #ff8fb4; }
+      .last { color: var(--dim); }
+      .you { color: var(--gold); font-weight: 700; text-shadow: 0 0 14px var(--gold-glow); }
+      .sent { color: var(--phos); font-style: italic; }
 
-      /* seat-mode action bar (epic #317): buttons for the seat's legal moves */
+      /* seat-mode action bar (epic #317): buttons for the seat's legal moves.
+         Console green by default; fold takes a pink edge, the aggressive moves a cyan one. */
       #actions { display: none; flex-wrap: wrap; gap: 6px; justify-content: center; flex: 0 0 auto; }
       #actions.on { display: flex; }
-      #actions button { background: #1a1b22; color: #e7e7ea; border: 1px solid #2a2c36;
-        border-radius: 7px; font: inherit; font-weight: 700; padding: 6px 12px; cursor: pointer;
-        min-height: 44px; }
-      #actions button:hover { background: #23252c; border-color: #7ee787; }
-      #actions button.fold { border-color: #6b3540; }
-      #actions button.aggro { border-color: #3a6b52; }
+      #actions button { background: #0c1410; color: var(--phos); border: 1px solid #1f3a2a;
+        border-radius: 9px; font: inherit; font-weight: 700; padding: 6px 12px; cursor: pointer;
+        min-height: 44px; box-shadow: inset 0 0 18px #00351a55; }
+      #actions button:hover { border-color: var(--phos); }
+      #actions button.fold { color: #ffc3e0; border-color: color-mix(in srgb, var(--pink) 55%, transparent);
+        box-shadow: inset 0 0 18px #ff5db11a, 0 0 12px color-mix(in srgb, var(--pink) calc(var(--glow) * 18%), transparent); }
+      #actions button.aggro { color: #bdf0ff; border-color: color-mix(in srgb, var(--cyan) 55%, transparent);
+        box-shadow: inset 0 0 18px #38e1ff1a, 0 0 12px color-mix(in srgb, var(--cyan) calc(var(--glow) * 18%), transparent); }
+      #actions button.fold:hover { border-color: var(--pink); }
+      #actions button.aggro:hover { border-color: var(--cyan); }
 
       /* endgame banner — sits over the felt, table still visible under it */
       #fin { position: absolute; inset: 0; z-index: 5; display: none; flex-direction: column;
         align-items: center; justify-content: center; text-align: center; pointer-events: none;
-        background: radial-gradient(ellipse at center, #0b1a12dd, #0b1a1288); border-radius: inherit; }
+        padding: 0 calc(var(--cw) * 0.7); /* keeps the sentence off the tube as it wraps */
+        background: radial-gradient(ellipse at center, #0a0b11e6, #0a0b11a6); border-radius: inherit; }
       #fin.on { display: flex; }
-      #fin .big { font-size: 26px; font-weight: 800; color: #7ee787; text-shadow: 0 2px 16px #000a; }
-      #fin .sub { margin-top: 6px; color: #e7e7ea; font-size: 14px; }
+      #fin .big { font-size: max(20px, calc(var(--cw) * 0.6)); font-weight: 800; color: var(--gold);
+        text-shadow: 0 0 calc(var(--cw) * 0.8) #ffd23f80, 0 2px 16px #000a; }
+      #fin .sub { margin-top: calc(var(--cw) * 0.14); color: var(--ink); font-size: max(11px, calc(var(--cw) * 0.3)); }
 
       /* hand-result beat — a transient pill over the middle band between hands (app.js toggles
          .on, then fades). Non-blocking and it wraps, so it never clips a 390px phone. */
       #beat { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-        z-index: 6; max-width: 86%; padding: 8px 14px; border-radius: 12px;
-        background: #0b0c10e6; border: 1px solid #ffffff26; box-shadow: 0 6px 22px #0009;
-        color: #e7e7ea; font-size: 12.5px; font-weight: 700; line-height: 1.35; text-align: center;
-        pointer-events: none; opacity: 0; transition: opacity .35s ease; }
+        z-index: 6; max-width: 86%; padding: calc(var(--cw) * 0.18) calc(var(--cw) * 0.3);
+        border-radius: calc(var(--cw) * 0.28);
+        background: #0d0f1aef; border: 1px solid color-mix(in srgb, var(--cyan) 24%, transparent);
+        box-shadow: 0 0 calc(var(--cw) * 0.9) var(--bloom-cool), 0 calc(var(--cw) * 0.14) calc(var(--cw) * 0.5) #000000a6;
+        color: var(--ink); font-size: max(11px, calc(var(--cw) * 0.28)); font-weight: 700; line-height: 1.35;
+        text-align: center; pointer-events: none; opacity: 0; transition: opacity .35s ease; }
       #beat.on { opacity: 1; }
 
       /* replay transport (?replay) — hidden in live mode; app.js reveals it */
       #controls { display: none; align-items: center; justify-content: center; flex-wrap: wrap;
         gap: 7px; flex: 0 0 auto; }
       #controls button, #controls select {
-        background: #1a1b22; color: #e7e7ea; border: 1px solid #2a2c36; border-radius: 6px;
+        background: var(--panel); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px;
         font: inherit; font-weight: 700; padding: 2px 9px; cursor: pointer; }
-      #controls button:hover { background: #23252c; }
-      #seek { width: 130px; accent-color: #7ee787; }
-      #pos { font: 700 12px/1 ui-monospace, monospace; color: #9aa0aa; min-width: 44px; text-align: center; }
+      #controls button:hover, #controls select:hover { border-color: var(--cyan); }
+      #seek { width: 130px; accent-color: var(--cyan); }
+      #pos { font: 700 12px/1 ui-monospace, monospace; color: var(--dim); min-width: 44px; text-align: center; }
     </style>
   </head>
   <body>

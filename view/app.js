@@ -218,7 +218,9 @@ function renderPoker(data, ctx) {
   }
   fin.classList.remove("on");
 
-  const last = lh ? ` · <span class="off">last hand: ${esc(lh.note)}</span>` : "";
+  // .last, not .off: the previous hand's line is history, not a fault — the two want
+  // different colours now that the stylesheet keeps pink for things that went wrong.
+  const last = lh ? ` · <span class="last">last hand: ${esc(lh.note)}</span>` : "";
   if (ctx) {
     const errTxt = seatErr ? ` · <span class="off">${esc(seatErr)}</span>` : "";
     if (ctx.pending) {
