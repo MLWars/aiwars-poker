@@ -22,7 +22,7 @@
       /* ---- palette + the intensity dial ----------------------------------------------
          The whole look is one token set. The five scalars below are the entire "how much
          neon" dial and every colour after them is derived from them; the shipped values
-         are the balanced-vivid level. --tube-alpha is a mix ratio and tops out at 1; the
+         are the SUBTLE level (owner pick, 2026-07-31 — the I1 of the three rendered options). --tube-alpha is a mix ratio and tops out at 1; the
          other four may be driven to 1.4 — past that the derived color-mix() percentages
          leave 0–100% and the declarations that use them drop out. */
       :root {
@@ -35,11 +35,11 @@
            fixed px, so the tube is the one fixed frame around the cw-scaled guts. */
         --rim: 6px;
 
-        --tube-alpha: .85; /* how hot the rim tube burns (0…1) */
-        --glow: 1;         /* bloom multiplier — the tube's outward glow and inward cast */
-        --wash: 1;         /* strength of the stage's radial washes */
+        --tube-alpha: .5;  /* how hot the rim tube burns (0…1) — owner pick: subtle */
+        --glow: .5;        /* bloom multiplier — the tube's outward glow and inward cast */
+        --wash: .45;       /* strength of the stage's radial washes */
         --ring2: 0;        /* the second, detached tube ring */
-        --lit: .3;         /* extra glow on chips, card backs and board slots */
+        --lit: 0;          /* extra glow on chips, card backs and board slots */
 
         /* derived — a function of the five knobs above and nothing else. --tube-off is the
            colour an unlit tube would be; every tube stop fades toward it as the dial drops. */
